@@ -85,7 +85,7 @@ func New(opts *Options) (*NSQD, error) {
 		dataPath = cwd
 	}
 	if opts.Logger == nil {
-		opts.Logger = log.New(os.Stderr, opts.LogPrefix, log.Ldate|log.Ltime|log.Lmicroseconds)
+		opts.Logger = log.New(os.Stderr, opts.LogPrefix, log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
 	}
 
 	n := &NSQD{
