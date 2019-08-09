@@ -66,7 +66,7 @@ type Channel struct {
 	deferredPQ       pqueue.PriorityQueue
 	deferredMutex    sync.Mutex
 	inFlightMessages map[MessageID]*Message
-	inFlightPQ       inFlightPqueue
+	inFlightPQ       inFlightPqueue // TODO 优先队列 堆
 	inFlightMutex    sync.Mutex
 }
 
@@ -89,7 +89,7 @@ func NewChannel(topicName string, channelName string, ctx *context,
 		)
 	}
 
-	c.initPQ()
+	c.initPQ() // 权重队列
 
 	if strings.HasSuffix(channelName, "#ephemeral") {
 		c.ephemeral = true
@@ -428,7 +428,7 @@ func (c *Channel) StartInFlightTimeout(msg *Message, clientID int64, timeout tim
 	msg.clientID = clientID
 	msg.deliveryTS = now
 	msg.pri = now.Add(timeout).UnixNano()
-	err := c.pushInFlightMessage(msg)
+	err := c.pushInFlightMessage(msg) // TODO insert map
 	if err != nil {
 		return err
 	}

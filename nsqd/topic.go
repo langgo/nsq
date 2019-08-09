@@ -24,7 +24,7 @@ type Topic struct {
 	name              string
 	channelMap        map[string]*Channel
 	backend           BackendQueue
-	memoryMsgChan     chan *Message
+	memoryMsgChan     chan *Message // TODO topic主要的channel
 	startChan         chan int
 	exitChan          chan int
 	channelUpdateChan chan int
@@ -162,7 +162,7 @@ func (t *Topic) DeleteExistingChannel(channelName string) error {
 
 	// update messagePump state
 	select {
-	case t.channelUpdateChan <- 1:
+	case t.channelUpdateChan <- 1: // TODO channelUpdateChan 不一定非得放进去
 	case <-t.exitChan:
 	}
 
@@ -249,13 +249,13 @@ func (t *Topic) messagePump() {
 	// do not pass messages before Start(), but avoid blocking Pause() or GetChannel()
 	for {
 		select {
-		case <-t.channelUpdateChan:
+		case <-t.channelUpdateChan: // TODO 启动前  清空 channelUpdateChan
 			continue
-		case <-t.pauseChan:
+		case <-t.pauseChan: // TODO 启动前 清空 pauseChan
 			continue
-		case <-t.exitChan:
+		case <-t.exitChan: // TODO startChan 之前 exitChan
 			goto exit
-		case <-t.startChan:
+		case <-t.startChan: // TODO startChan 接收到消息之后，开始下面的主循环
 		}
 		break
 	}
@@ -313,7 +313,7 @@ func (t *Topic) messagePump() {
 			// needs a unique instance but...
 			// fastpath to avoid copy if its the first channel
 			// (the topic already created the first copy)
-			if i > 0 {
+			if i > 0 { // TODO i = 0 复用topic中的msg
 				chanMsg = NewMessage(msg.ID, msg.Body)
 				chanMsg.Timestamp = msg.Timestamp
 				chanMsg.deferred = msg.deferred

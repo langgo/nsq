@@ -486,7 +486,7 @@ func (n *NSQD) GetTopic(topicName string) *Topic {
 
 	// if using lookupd, make a blocking call to get the topics, and immediately create them.
 	// this makes sure that any message received is buffered to the right channels
-	lookupdHTTPAddrs := n.lookupdHTTPAddrs()
+	lookupdHTTPAddrs := n.lookupdHTTPAddrs() // TODO 协议解析和业务逻辑应当代码分离
 	if len(lookupdHTTPAddrs) > 0 {
 		channelNames, err := n.ci.GetLookupdTopicChannels(t.name, lookupdHTTPAddrs)
 		if err != nil {

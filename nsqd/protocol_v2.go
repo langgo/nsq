@@ -53,7 +53,7 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 
 	for {
 		if client.HeartbeatInterval > 0 {
-			client.SetReadDeadline(time.Now().Add(client.HeartbeatInterval * 2))
+			client.SetReadDeadline(time.Now().Add(client.HeartbeatInterval * 2)) // 因为会定期发送心跳
 		} else {
 			client.SetReadDeadline(zeroTime)
 		}
@@ -221,7 +221,7 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 	// we force flush in two cases:
 	//    1. when the client is not ready to receive messages
 	//    2. we're buffered and the channel has nothing left to send us
-	//       (ie. we would block in this loop anyway)
+	//       (ie. we would block in this loop anyway) // TODO 这里的描述，从实现角度上说，是有问题的
 	//
 	flushed := true
 
@@ -232,12 +232,12 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 	for {
 		if subChannel == nil || !client.IsReadyForMessages() {
 			// the client is not ready to receive messages...
-			memoryMsgChan = nil
-			backendMsgChan = nil
-			flusherChan = nil
+			memoryMsgChan = nil // TODO 会阻塞在 select ReadyStateChan 会跳出 select
+			backendMsgChan = nil // TODO 会阻塞在 select
+			flusherChan = nil // TODO 会阻塞在 select
 			// force flush
 			client.writeLock.Lock()
-			err = client.Flush()
+			err = client.Flush() // TODO 目的是什么
 			client.writeLock.Unlock()
 			if err != nil {
 				goto exit
@@ -260,7 +260,7 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 		select {
 		case <-flusherChan:
 			// if this case wins, we're either starved
-			// or we won the race between other channels...
+			// or we won the race between other channels... // TODO 这个地方似乎不太符合目的 L223. 这里基本是每 OutputBufferTimeout Flush 一次
 			// in either case, force flush
 			client.writeLock.Lock()
 			err = client.Flush()
@@ -269,7 +269,7 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 				goto exit
 			}
 			flushed = true
-		case <-client.ReadyStateChan:
+		case <-client.ReadyStateChan: // TODO 主要目的是不再阻塞，会执行循环内最初的判断
 		case subChannel = <-subEventChan:
 			// you can't SUB anymore
 			subEventChan = nil
@@ -312,20 +312,20 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 			msg.Attempts++
 
 			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout)
-			client.SendingMessage()
+			client.SendingMessage() // TODO 统计
 			err = p.SendMessage(client, msg)
 			if err != nil {
 				goto exit
 			}
 			flushed = false
-		case msg := <-memoryMsgChan:
+		case msg := <-memoryMsgChan: // backendMsgChan 和 memoryMsgChan 地位是一样的
 			if sampleRate > 0 && rand.Int31n(100) > sampleRate {
 				continue
 			}
 			msg.Attempts++
 
-			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout)
-			client.SendingMessage()
+			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout) // TODO in flight 消息队列的一个主要特性性 保证每条消息一定被消费（可以重复消费）这时带来了
+			client.SendingMessage() // TODO 统计 // TODO 一个重要的问题就是 Ack 。所以在推送消息的时候，如果超时未处理，要re queue
 			err = p.SendMessage(client, msg)
 			if err != nil {
 				goto exit
@@ -620,7 +620,7 @@ func (p *protocolV2) SUB(client *clientV2, params [][]byte) ([]byte, error) {
 				fmt.Sprintf("channel consumers for %s:%s exceeds limit of %d",
 					topicName, channelName, p.ctx.nsqd.getOpts().MaxChannelConsumers))
 		}
-
+		// 如果临时topic正在退出，那么等它退出了之后(sleep 1s)，再创建一个新的临时topic
 		if (channel.ephemeral && channel.Exiting()) || (topic.ephemeral && topic.Exiting()) {
 			channel.RemoveClient(client.ID)
 			time.Sleep(1 * time.Millisecond)
@@ -628,7 +628,7 @@ func (p *protocolV2) SUB(client *clientV2, params [][]byte) ([]byte, error) {
 		}
 		break
 	}
-	atomic.StoreInt32(&client.State, stateSubscribed)
+	atomic.StoreInt32(&client.State, stateSubscribed) // TODO nsq client 不会并发执行命令。顺序执行的。
 	client.Channel = channel
 	// update message pump
 	client.SubEventChan <- channel

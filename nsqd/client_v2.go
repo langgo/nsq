@@ -68,21 +68,21 @@ type clientV2 struct {
 	net.Conn
 
 	// connections based on negotiated features
-	tlsConn     *tls.Conn
-	flateWriter *flate.Writer
+	tlsConn     *tls.Conn  // TODO protected by writeLock
+	flateWriter *flate.Writer  // TODO protected by writeLock
 
 	// reading/writing interfaces
-	Reader *bufio.Reader
-	Writer *bufio.Writer
+	Reader *bufio.Reader  // TODO protected by writeLock
+	Writer *bufio.Writer  // TODO protected by writeLock
 
-	OutputBufferSize    int
-	OutputBufferTimeout time.Duration
+	OutputBufferSize    int  // TODO protected by writeLock
+	OutputBufferTimeout time.Duration  // TODO protected by writeLock
 
-	HeartbeatInterval time.Duration
+	HeartbeatInterval time.Duration // TODO protected by writeLock
 
-	MsgTimeout time.Duration
+	MsgTimeout time.Duration  // TODO protected by writeLock
 
-	State          int32
+	State          int32 // TODO 读（一个）写并发，但是不会写写并发
 	ConnectTime    time.Time
 	Channel        *Channel
 	ReadyStateChan chan int
@@ -314,12 +314,12 @@ func (c *clientV2) IsReadyForMessages() bool {
 		return false
 	}
 
-	readyCount := atomic.LoadInt64(&c.ReadyCount)
+	readyCount := atomic.LoadInt64(&c.ReadyCount) // TODO 推模式 一定要考虑的一个事情就是流控。（保证接收端 处理能力）
 	inFlightCount := atomic.LoadInt64(&c.InFlightCount)
 
 	c.ctx.nsqd.logf(LOG_DEBUG, "[%s] state rdy: %4d inflt: %4d", c, readyCount, inFlightCount)
 
-	if inFlightCount >= readyCount || readyCount <= 0 {
+	if inFlightCount >= readyCount || readyCount <= 0 { // TODO readyCount <= 0 这个分支是走不到的？readyCount >= 0 inFlightCount >= 0
 		return false
 	}
 
@@ -331,7 +331,7 @@ func (c *clientV2) SetReadyCount(count int64) {
 	c.tryUpdateReadyState()
 }
 
-func (c *clientV2) tryUpdateReadyState() {
+func (c *clientV2) tryUpdateReadyState() { // TODO 目的是什么
 	// you can always *try* to write to ReadyStateChan because in the cases
 	// where you cannot the message pump loop would have iterated anyway.
 	// the atomic integer operations guarantee correctness of the value.
